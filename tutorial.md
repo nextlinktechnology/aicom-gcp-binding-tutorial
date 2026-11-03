@@ -6,15 +6,24 @@
 
 ## ​
 
-### 1. 選擇要串接的 Project
+## 1. 選擇要串接的 Project
 
 請選擇本次要串接至 AICOM 的 GCP Project。
 
-如使用既有 Project，請確認您具備必要的設定權限；若尚無適用的 Project，可先建立新 Project。
+如使用既有 Project，請確認您具備必要的設定權限。若尚無適用的 Project，可先建立新 Project。
 
-<walkthrough-project-setup></walkthrough-project-setup>
+## 2. 新增專案標籤（Label）
 
-### 2. 啟用必要 API
+請從 AICOM 平台複製系統提供的標籤值（`label_value`）。
+
+下方指令會帶入第 1 步選擇的 Project ID。請將 `<LABEL-VALUE>` 替換為剛複製的標籤值，再將整段指令貼到左側 Cloud Shell 執行。
+
+```bash
+gcloud alpha projects update "<walkthrough-project-id/>" \
+  --update-labels="aicom-binding=<LABEL-VALUE>"
+```
+
+## 3. 啟用必要 API
 
 AICOM 需透過以下 GCP API 取得此 Project 的雲端資源，請點擊 「啟用」，系統將為目前選擇的 Project 啟用必要 API：
 
