@@ -12,6 +12,8 @@
 
 如使用既有 Project，請確認您具備必要的設定權限。若尚無適用的 Project，可先建立新 Project。
 
+<walkthrough-project-setup></walkthrough-project-setup>
+
 ## 2. 新增專案標籤（Label）
 
 請從 AICOM 平台複製系統提供的標籤值（`label_value`）。
