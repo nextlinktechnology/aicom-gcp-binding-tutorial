@@ -6,7 +6,7 @@
 
 請點擊下方按鈕，在 Google Cloud Shell 中直接開啟並執行本教學：
 
-[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=您的_GITHUB_REPO_網址&cloudshell_tutorial=tutorial.md)
+[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=https://github.com/nextlinktechnology/aicom-gcp-binding-tutorial&cloudshell_tutorial=tutorial.md)
 > **注意**：請將上述網址中的 `您的_GITHUB_REPO_網址` 替換為本 Repository 的實際 URL。
 
 ## 執行流程簡介
