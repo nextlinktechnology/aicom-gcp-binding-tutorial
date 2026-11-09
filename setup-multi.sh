@@ -1,6 +1,169 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIRECTORY="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+# Keep the selection workflow behind the multi-project script entry point.
+if [ "${1:-}" = "--select" ]; then
+    shift
+    exec python3 -c "$(cat <<'PYTHON_SELECTOR'
+#!/usr/bin/env python3
+"""Select accessible GCP projects and save IDs for the tutorial steps."""
+
+import argparse
+import fcntl
+import re
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+
+
+MESSAGES = {
+    "zh": {
+        "loading": "正在讀取目前帳號可存取的 GCP 專案…",
+        "replacing": "開始重新選擇，已清除上次的專案清單。",
+        "title": "選擇要連接至 AICOM 的專案",
+        "header": "編號  專案名稱 / Project ID",
+        "note": "請選擇您有權設定標籤、啟用 API 與授予 IAM 權限的專案。",
+        "prompt": "輸入編號，以空白分隔（例如 1 3），或輸入 q 取消 > ",
+        "invalid": "請輸入清單中的有效編號，例如 1 3。",
+        "selected": "已選擇 {count} 個專案",
+        "confirm": "輸入 y 確認儲存、a 繼續加入、n 清空重選、q 取消 > ",
+        "confirm_invalid": "請輸入 y、a、n 或 q。",
+        "saved": "已儲存 {count} 個專案。請繼續教學的「設定專案標籤」步驟。",
+        "cancelled": "已取消選擇。請重新執行選單後再繼續教學。",
+        "empty": "目前帳號沒有可列出的專案。請確認登入帳號與專案存取權限。",
+        "error": "無法完成專案選擇，請查看錯誤後重試。",
+    },
+    "en": {
+        "loading": "Loading GCP projects accessible by the active account…",
+        "replacing": "Starting a new selection. The previous project list has been cleared.",
+        "title": "Select projects to connect to AICOM",
+        "header": "No.   Project name / Project ID",
+        "note": "Choose projects where you can update labels, enable APIs and grant IAM access.",
+        "prompt": "Enter numbers separated by spaces (for example 1 3), or q to cancel > ",
+        "invalid": "Enter valid numbers from the list, for example 1 3.",
+        "selected": "Selected {count} projects",
+        "confirm": "Enter y to save, a to add more, n to start over, or q to cancel > ",
+        "confirm_invalid": "Enter y, a, n or q.",
+        "saved": "Saved {count} projects. Continue to the Set the Project Labels step.",
+        "cancelled": "Selection cancelled. Run the selector again before continuing.",
+        "empty": "No projects were listed. Check the active account and project access.",
+        "error": "Could not complete project selection. Review the error and try again.",
+    },
+}
+
+
+def display_name(value):
+    # Project names are external data and may contain terminal control characters.
+    return "".join(character for character in value if character.isprintable())
+
+
+def select_projects(projects, messages):
+    selected_by_id = {}
+    while True:
+        print("\n" + messages["title"])
+        print(messages["header"])
+        for number, project in enumerate(projects, start=1):
+            print(f"{number:<5} {display_name(project.get('name') or project['projectId'])}")
+            print(f"      {project['projectId']}")
+        print("\n" + messages["note"])
+        selection = input(messages["prompt"]).strip()
+        if selection.lower() == "q":
+            return None
+        # Compare strings to known options to reject zero, negatives and huge numbers.
+        options = {str(number): project for number, project in enumerate(projects, start=1)}
+        numbers = selection.split()
+        if not numbers or any(number not in options for number in numbers):
+            print(messages["invalid"])
+            continue
+        for number in numbers:
+            project = options[number]
+            selected_by_id[project['projectId']] = project
+        selected = list(selected_by_id.values())
+        print("\n" + messages["selected"].format(count=len(selected)))
+        for project in selected:
+            print(f"  ✓ {display_name(project.get('name') or project['projectId'])} ({project['projectId']})")
+        while True:
+            answer = input(messages["confirm"]).strip().lower()
+            if answer == "y":
+                return selected
+            if answer == "q":
+                return None
+            if answer == "n":
+                selected_by_id.clear()
+                break
+            if answer == "a":
+                break
+            print(messages["confirm_invalid"])
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("directory")
+    parser.add_argument("--language", choices=("zh", "en"), default="zh")
+    args = parser.parse_args()
+    messages = MESSAGES[args.language]
+    selection_file = Path(args.directory) / ".aicom-projects"
+    temporary_path = None
+    lock = None
+    try:
+        lock = selection_file.with_name(".aicom-projects-lock").open("a")
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # Invalidate old selections so cancellation or a failed refresh cannot reuse them.
+        if selection_file.exists():
+            selection_file.unlink()
+            print(messages["replacing"])
+        print(messages["loading"])
+        result = subprocess.run(
+            ["gcloud", "projects", "list", "--format=json(projectId,name)", "--sort-by=name,projectId"],
+            check=True, stdout=subprocess.PIPE, text=True,
+        )
+        projects = json.loads(result.stdout)
+        if not isinstance(projects, list):
+            raise ValueError("Invalid project list returned by gcloud.")
+        for project in projects:
+            project_id = project.get("projectId") if isinstance(project, dict) else None
+            if not isinstance(project_id, str) or re.fullmatch(r"[a-z0-9][a-z0-9.:-]*", project_id) is None:
+                raise ValueError("Invalid Project ID returned by gcloud.")
+            if project.get("name") is not None and not isinstance(project["name"], str):
+                raise ValueError("Invalid project name returned by gcloud.")
+        if not projects:
+            print(messages["empty"])
+            return 1
+        selected = select_projects(projects, messages)
+        if selected is None:
+            print(messages["cancelled"])
+            return 1
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=selection_file.parent,
+                                         prefix=".aicom-projects-", delete=False) as output:
+            temporary_path = Path(output.name)
+            for project in selected:
+                output.write(project["projectId"] + "\n")
+        os.replace(temporary_path, selection_file)
+        print("\n" + messages["saved"].format(count=len(selected)))
+        return 0
+    except (EOFError, KeyboardInterrupt):
+        print("\n" + messages["cancelled"])
+        return 1
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        print(f"{messages['error']}\n{error}")
+        return 1
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
+        if lock is not None:
+            lock.close()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+PYTHON_SELECTOR
+)" "$SCRIPT_DIRECTORY" "$@"
+fi
+
 # 多專案設定，預設執行 IAM 授權。
 ACTION="iam"
 LABEL_VALUE=""
@@ -22,12 +185,12 @@ esac
 
 if [ "${1:-}" = "--selected" ]; then
     if [ "$#" -ne 1 ]; then
-        echo '❌ --selected 請單獨使用，專案清單由教學中的 GCP 選擇與加入步驟提供。' >&2
+        echo '❌ --selected 請單獨使用，專案清單由終端機互動選單提供。' >&2
         exit 1
     fi
-    SELECTION_FILE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/.aicom-projects"
+    SELECTION_FILE="$SCRIPT_DIRECTORY/.aicom-projects"
     if [ ! -s "$SELECTION_FILE" ]; then
-        echo '❌ 尚未選擇專案。請先依教學透過 GCP 選擇器選取專案並執行加入指令，再執行 python3 select-projects.py list 檢查清單。' >&2
+        echo '❌ 尚未選擇專案。請先執行 bash setup-multi.sh --select 並確認儲存清單。' >&2
         exit 1
     fi
     SELECTED_PROJECTS=()

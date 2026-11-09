@@ -4,55 +4,47 @@
 
 ## Before You Begin
 
-You’re now in GCP Cloud Shell. This tutorial guides you through adding projects one at a time with the GCP graphical picker, setting project labels, enabling the required APIs, and granting IAM permissions. You’ll then return to AICOM to verify your setup.
+You’re now in GCP Cloud Shell. This tutorial guides you through selecting projects from an interactive terminal menu, setting project labels, enabling the required APIs, and granting IAM permissions. You’ll then return to AICOM to verify your setup.
 
 Make sure you have permission to update labels, enable APIs, and manage IAM access in every target project.
 
 Projects in the same AICOM connection session can share one Label Value to verify your control over each project. Keep the original AICOM connection window open. If closing the window invalidates the Label Value, start a new connection session and apply the new value to every target project.
 
-## Start the Project List for This Session
+## Select Your GCP Projects
 
-Run the following command in the Cloud Shell terminal from this tutorial’s directory. This clears the previously saved list. Run it once when starting a new connection session.
-
-```bash
-python3 select-projects.py --language en reset
-```
-
-## Select and Add GCP Projects One at a Time
-
-Use the GCP graphical picker below to select the first project you want to connect.
-
-<walkthrough-project-setup></walkthrough-project-setup>
-
-Check that the command below shows the Project ID you just selected. Copy the entire command into the Cloud Shell terminal and run it to add the project to this session’s list.
+Run the following command in the Cloud Shell terminal from this tutorial’s directory. Complete Cloud Shell authorization if prompted.
 
 ```bash
-python3 select-projects.py --language en add "<walkthrough-project-id/>"
+bash setup-multi.sh --select --language en
 ```
 
-The terminal will show the accumulated project list.
+The menu lists project names and IDs accessible by the active account. Enter the numbers of the projects you want to connect, separated by spaces, such as `1 3`, then press Enter.
 
-To add more projects, stay on this step and repeat the following actions.
+```text
+Select projects to connect to AICOM
+No.   Project name / Project ID
+1     Production
+      company-prod
+2     Staging
+      company-staging
+3     Development
+      company-dev
 
-1. Use the GCP picker above to switch to another project.
-2. Check that the add command above shows the new Project ID, then copy and run the updated command.
-3. Check that the terminal’s list includes the project you just added.
-
-Run the add command after every selection. Copy the updated command from the tutorial each time. Commands in your terminal history retain their previous Project IDs. Adding a project twice skips the duplicate and retains the other projects already in the list.
-
-Continue once you have added every project. If you added the wrong project, return to Start the Project List for This Session, reset the list, and select the intended projects again.
-
-## Review the Project List
-
-Run the following command and check that the list contains every project you want to connect in this session.
-
-```bash
-python3 select-projects.py --language en list
+Enter numbers separated by spaces (for example 1 3), or q to cancel > 1 3
 ```
 
-If a project is missing, return to the previous step to select and add it, then review the list again. Continue to the label step once the list is correct.
+This is an example. Your actual list depends on your account. Choose projects where you can update labels, enable APIs and grant IAM access.
 
-The list is saved to `.aicom-projects` in this tutorial’s directory. Subsequent steps load the entire list. After opening a new terminal, return to the same tutorial directory to continue. Use `list` to review projects already selected for the current session.
+Review the selected projects, then enter one of the following options.
+
+- `y` to confirm and save the list, then continue to the next step.
+- `a` to return to the menu and add more projects, keeping the current selection.
+- `n` to clear the current selection and start over.
+- `q` to cancel. Run the selector again before continuing.
+
+You can select multiple numbers at once or add projects over several rounds. Repeated projects are automatically combined.
+
+After you enter `y`, the list is saved to `.aicom-projects` in this tutorial’s directory and loaded by subsequent steps. Running `--select` again clears the previous list and starts a new selection. If you cancel or loading fails, select and confirm again. After opening a new terminal, return to the same tutorial directory to use the saved list.
 
 ## Set the Project Labels
 
