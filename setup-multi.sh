@@ -22,12 +22,12 @@ esac
 
 if [ "${1:-}" = "--selected" ]; then
     if [ "$#" -ne 1 ]; then
-        echo '❌ --selected 請單獨使用，專案清單由互動選單提供。' >&2
+        echo '❌ --selected 請單獨使用，專案清單由教學中的 GCP 選擇與加入步驟提供。' >&2
         exit 1
     fi
     SELECTION_FILE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/.aicom-projects"
     if [ ! -s "$SELECTION_FILE" ]; then
-        echo '❌ 尚未選擇專案。請先執行 python3 select-projects.py 並確認清單。' >&2
+        echo '❌ 尚未選擇專案。請先依教學透過 GCP 選擇器選取專案並執行加入指令，再執行 python3 select-projects.py list 檢查清單。' >&2
         exit 1
     fi
     SELECTED_PROJECTS=()
