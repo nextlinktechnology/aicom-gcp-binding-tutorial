@@ -11,6 +11,9 @@ if [ "${1:-}" = "--select" ]; then
 """Select accessible GCP projects and save IDs for the tutorial steps."""
 
 import argparse
+import curses
+import sys
+import unicodedata
 import fcntl
 import re
 import json
@@ -24,14 +27,13 @@ MESSAGES = {
     "zh": {
         "loading": "正在讀取目前帳號可存取的 GCP 專案…",
         "replacing": "開始重新選擇，已清除上次的專案清單。",
-        "title": "選擇要連接至 AICOM 的專案",
-        "header": "編號  專案名稱 / Project ID",
-        "note": "請選擇您有權設定標籤、啟用 API 與授予 IAM 權限的專案。",
-        "prompt": "輸入編號，以空白分隔（例如 1 3），或輸入 q 取消 > ",
-        "invalid": "請輸入清單中的有效編號，例如 1 3。",
-        "selected": "已選擇 {count} 個專案",
-        "confirm": "輸入 y 確認儲存、a 繼續加入、n 清空重選、q 取消 > ",
-        "confirm_invalid": "請輸入 y、a、n 或 q。",
+        "title": "AICOM | 選擇要綁定的 GCP 專案",
+        "keys": "↑↓ 移動  空白鍵 勾選/取消  Enter 儲存",
+        "more_keys": "a 全選  c 清空  PgUp/PgDn 翻頁  q/Esc 取消",
+        "count": "已勾選 {count} / {total} 個專案 · 目前第 {position} 個",
+        "required": "請至少勾選一個專案，再按 Enter。",
+        "small": "請放大終端機，至少 40 欄 × 12 列。q 可取消。",
+        "tty": "請直接在 Cloud Shell 互動式終端機執行此指令。",
         "saved": "已儲存 {count} 個專案。請繼續教學的「設定專案標籤」步驟。",
         "cancelled": "已取消選擇。請重新執行選單後再繼續教學。",
         "empty": "目前帳號沒有可列出的專案。請確認登入帳號與專案存取權限。",
@@ -40,14 +42,13 @@ MESSAGES = {
     "en": {
         "loading": "Loading GCP projects accessible by the active account…",
         "replacing": "Starting a new selection. The previous project list has been cleared.",
-        "title": "Select projects to connect to AICOM",
-        "header": "No.   Project name / Project ID",
-        "note": "Choose projects where you can update labels, enable APIs and grant IAM access.",
-        "prompt": "Enter numbers separated by spaces (for example 1 3), or q to cancel > ",
-        "invalid": "Enter valid numbers from the list, for example 1 3.",
-        "selected": "Selected {count} projects",
-        "confirm": "Enter y to save, a to add more, n to start over, or q to cancel > ",
-        "confirm_invalid": "Enter y, a, n or q.",
+        "title": "AICOM | Select GCP projects to connect",
+        "keys": "Up/Down Move  Space Toggle  Enter Save",
+        "more_keys": "a All  c Clear  PgUp/PgDn Page  q/Esc Cancel",
+        "count": "Selected {count} / {total} projects · Row {position}",
+        "required": "Select at least one project before pressing Enter.",
+        "small": "Enlarge the terminal to 40 columns x 12 rows. q cancels.",
+        "tty": "Run this command directly in an interactive Cloud Shell terminal.",
         "saved": "Saved {count} projects. Continue to the Set the Project Labels step.",
         "cancelled": "Selection cancelled. Run the selector again before continuing.",
         "empty": "No projects were listed. Check the active account and project access.",
@@ -55,49 +56,94 @@ MESSAGES = {
     },
 }
 
-
 def display_name(value):
     # Project names are external data and may contain terminal control characters.
     return "".join(character for character in value if character.isprintable())
 
 
-def select_projects(projects, messages):
-    selected_by_id = {}
+def draw_text(screen, row, value, attributes=0):
+    # Clip by terminal cells so Chinese names and resizing cannot overflow a row.
+    height, width = screen.getmaxyx()
+    if row >= height:
+        return
+    available = max(0, width - 2)
+    rendered = []
+    for character in display_name(value):
+        cells = 0 if unicodedata.combining(character) else (2 if unicodedata.east_asian_width(character) in "WF" else 1)
+        if cells > available:
+            break
+        rendered.append(character)
+        available -= cells
+    try:
+        screen.addstr(row, 0, "".join(rendered), attributes)
+    except curses.error:
+        # A resize may occur between measuring the window and drawing the text.
+        pass
+
+
+def select_projects(screen, projects, messages):
+    screen.keypad(True)
+    try:
+        curses.curs_set(0)
+    except curses.error:
+        pass
+    selected = set()
+    cursor = 0
+    first_visible = 0
+    status = ""
     while True:
-        print("\n" + messages["title"])
-        print(messages["header"])
-        for number, project in enumerate(projects, start=1):
-            print(f"{number:<5} {display_name(project.get('name') or project['projectId'])}")
-            print(f"      {project['projectId']}")
-        print("\n" + messages["note"])
-        selection = input(messages["prompt"]).strip()
-        if selection.lower() == "q":
-            return None
-        # Compare strings to known options to reject zero, negatives and huge numbers.
-        options = {str(number): project for number, project in enumerate(projects, start=1)}
-        numbers = selection.split()
-        if not numbers or any(number not in options for number in numbers):
-            print(messages["invalid"])
-            continue
-        for number in numbers:
-            project = options[number]
-            selected_by_id[project['projectId']] = project
-        selected = list(selected_by_id.values())
-        print("\n" + messages["selected"].format(count=len(selected)))
-        for project in selected:
-            print(f"  ✓ {display_name(project.get('name') or project['projectId'])} ({project['projectId']})")
-        while True:
-            answer = input(messages["confirm"]).strip().lower()
-            if answer == "y":
-                return selected
-            if answer == "q":
+        screen.erase()
+        height, width = screen.getmaxyx()
+        if height < 12 or width < 40:
+            draw_text(screen, 0, messages["small"])
+            screen.refresh()
+            if screen.get_wch() in ("q", "Q", "\x1b"):
                 return None
-            if answer == "n":
-                selected_by_id.clear()
-                break
-            if answer == "a":
-                break
-            print(messages["confirm_invalid"])
+            continue
+        page_size = max(1, (height - 8) // 2)
+        first_visible = min(first_visible, cursor)
+        first_visible = max(first_visible, cursor - page_size + 1)
+        draw_text(screen, 0, messages["title"], curses.A_BOLD)
+        draw_text(screen, 1, messages["keys"])
+        draw_text(screen, 2, messages["more_keys"])
+        for index in range(first_visible, min(len(projects), first_visible + page_size)):
+            project = projects[index]
+            marker = "[x]" if project["projectId"] in selected else "[ ]"
+            name = project.get("name") or project["projectId"]
+            attributes = curses.A_REVERSE if index == cursor else curses.A_NORMAL
+            row = 4 + (index - first_visible) * 2
+            draw_text(screen, row, f"{marker} {name}", attributes)
+            draw_text(screen, row + 1, f"    {project['projectId']}", attributes)
+        draw_text(screen, height - 3, messages["count"].format(count=len(selected), total=len(projects), position=cursor + 1))
+        draw_text(screen, height - 2, status, curses.A_BOLD)
+        screen.refresh()
+        key = screen.get_wch()
+        status = ""
+        if key in ("q", "Q", "\x1b"):
+            return None
+        if key in ("\n", "\r", curses.KEY_ENTER):
+            if selected:
+                return [project for project in projects if project["projectId"] in selected]
+            status = messages["required"]
+        elif key == " ":
+            project_id = projects[cursor]["projectId"]
+            selected.symmetric_difference_update({project_id})
+        elif key in ("a", "A"):
+            selected = {project["projectId"] for project in projects}
+        elif key in ("c", "C"):
+            selected.clear()
+        elif key in (curses.KEY_UP, "k"):
+            cursor = max(0, cursor - 1)
+        elif key in (curses.KEY_DOWN, "j"):
+            cursor = min(len(projects) - 1, cursor + 1)
+        elif key == curses.KEY_PPAGE:
+            cursor = max(0, cursor - page_size)
+        elif key == curses.KEY_NPAGE:
+            cursor = min(len(projects) - 1, cursor + page_size)
+        elif key == curses.KEY_HOME:
+            cursor = 0
+        elif key == curses.KEY_END:
+            cursor = len(projects) - 1
 
 
 def main():
@@ -106,6 +152,9 @@ def main():
     parser.add_argument("--language", choices=("zh", "en"), default="zh")
     args = parser.parse_args()
     messages = MESSAGES[args.language]
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        print(messages["tty"])
+        return 1
     selection_file = Path(args.directory) / ".aicom-projects"
     temporary_path = None
     lock = None
@@ -133,7 +182,7 @@ def main():
         if not projects:
             print(messages["empty"])
             return 1
-        selected = select_projects(projects, messages)
+        selected = curses.wrapper(select_projects, projects, messages)
         if selected is None:
             print(messages["cancelled"])
             return 1
@@ -144,11 +193,13 @@ def main():
                 output.write(project["projectId"] + "\n")
         os.replace(temporary_path, selection_file)
         print("\n" + messages["saved"].format(count=len(selected)))
+        for project in selected:
+            print(f"  [x] {project['projectId']}")
         return 0
     except (EOFError, KeyboardInterrupt):
         print("\n" + messages["cancelled"])
         return 1
-    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+    except (OSError, ValueError, curses.error, subprocess.CalledProcessError) as error:
         print(f"{messages['error']}\n{error}")
         return 1
     finally:
@@ -185,7 +236,7 @@ esac
 
 if [ "${1:-}" = "--selected" ]; then
     if [ "$#" -ne 1 ]; then
-        echo '❌ --selected 請單獨使用，專案清單由終端機互動選單提供。' >&2
+        echo '❌ --selected 請單獨使用，專案清單由專案選取介面提供。' >&2
         exit 1
     fi
     SELECTION_FILE="$SCRIPT_DIRECTORY/.aicom-projects"

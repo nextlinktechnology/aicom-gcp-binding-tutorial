@@ -15,7 +15,7 @@
 
 ## 執行流程
 
-1. 選擇單一專案，或透過終端機互動選單選取多個專案。
+1. 選擇單一專案，或透過終端機勾選清單選取多個專案。
 2. 設定 `aicom-binding` 標籤。同一次 AICOM 綁定的多個專案可共用一個 Label Value。
 3. 為各專案啟用必要 API。
 4. 將各專案的 `roles/viewer` 角色授予 AICOM 服務帳戶。
@@ -26,7 +26,7 @@
 | 用途 | 腳本 | 對應教學 |
 | --- | --- | --- |
 | 單專案 IAM 授權 | `setup.sh` | `tutorial.md`、`tutorial-en.md` |
-| 多專案互動選取、標籤、API 與 IAM 設定 | `setup-multi.sh` | `tutorial-multi.md`、`tutorial-multi-en.md` |
+| 多專案選取入口、標籤、API 與 IAM 設定 | `setup-multi.sh` | `tutorial-multi.md`、`tutorial-multi-en.md` |
 
 單一專案 IAM 授權可直接執行。
 
@@ -34,13 +34,15 @@
 bash setup.sh "my-company-prod-123"
 ```
 
-多專案教學使用終端機互動選單。執行下方指令後，依清單中的專案名稱與 ID 輸入編號，例如 `1 3`。
+多專案教學使用 Cloud Shell 終端機內的勾選式多選清單。
 
 ```bash
 bash setup-multi.sh --select
 ```
 
-選取後可輸入 `a` 繼續加入、`n` 清空重選、`q` 取消，或輸入 `y` 確認並自動儲存清單。重複選取同一專案會自動合併。英文選單使用 `bash setup-multi.sh --select --language en`。
+使用方向鍵移動、空白鍵勾選或取消勾選，再按 Enter 確認並自動儲存。`a` 全選、`c` 清空、Page Up / Page Down 翻頁、`q` 或 Esc 取消。英文介面使用 `bash setup-multi.sh --select --language en`。
+
+請在互動式終端機執行，視窗至少需要 40 欄 × 12 列。選單使用 Python 的 `curses` 終端機介面。
 
 確認清單後，將 `<LABEL-VALUE>` 替換為 AICOM 本次提供的值，分步執行下列指令，每一步全部成功後再繼續。
 
