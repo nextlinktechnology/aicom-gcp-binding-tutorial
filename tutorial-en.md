@@ -2,6 +2,8 @@
 
 # Connect Your GCP Project to AICOM
 
+## Before You Begin
+
 You’re now in GCP Cloud Shell. Follow this tutorial and run the commands provided by AICOM to connect your project.
 
 You’ll select a project, set a project label, enable the required APIs, and grant IAM permissions. Once you’re done, return to AICOM to verify your setup.
