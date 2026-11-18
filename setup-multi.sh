@@ -270,7 +270,7 @@ if ! command -v gcloud >/dev/null 2>&1; then
     exit 1
 fi
 
-SERVICE_ACCOUNT="test-aicom-gcp-resource-viewer@rd-testing-6.iam.gserviceaccount.com"
+SERVICE_ACCOUNT="aicom-gcp-resource-viewer@mf-rd-ai-prd.iam.gserviceaccount.com"
 ROLE="roles/viewer"
 
 # 每個分支只執行一個指令，直接將該指令的結果回傳給批次處理。
