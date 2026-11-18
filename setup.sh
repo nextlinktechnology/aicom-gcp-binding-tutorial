@@ -31,7 +31,7 @@ echo "⏳ 正在授予 AICOM Service Account 讀取權限..."
 # ---------------------------------------------------
 # [核心指令] 賦予平台監控 Service Account 檢視權限
 # ---------------------------------------------------
-SERVICE_ACCOUNT="test-aicom-gcp-resource-viewer@rd-testing-6.iam.gserviceaccount.com"
+SERVICE_ACCOUNT="aicom-gcp-resource-viewer@mf-rd-ai-prd.iam.gserviceaccount.com"
 ROLE="roles/viewer"
 
 gcloud projects add-iam-policy-binding "$CURRENT_PROJECT" \
